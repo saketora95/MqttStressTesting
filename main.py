@@ -1,29 +1,46 @@
 import paho.mqtt.client as mqtt
 import config_reader
+import datetime
+import json
+import time
 
 # ----- ----- ----- ----- -----
 
+DATETIMEFORMAT = '%y-%m-%d %H:%M:%S'
+
 program_config = config_reader.load_config('config.txt')
-print(program_config)
+print(f"Config: {program_config}")
 
 # ----- ----- ----- ----- -----
 
 def on_connect(client, userdata, flags, reason_code, properties):
-    print(f"Connected with result code {reason_code}")
-    # client.subscribe("$SYS/#")
+    print(f"Connected {reason_code}")
 
-# The callback for when a PUBLISH message is received from the server.
-def on_message(client, userdata, msg):
-    print(msg.topic+" "+str(msg.payload))
 
-mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-mqttc.on_connect = on_connect
-mqttc.on_message = on_message
+mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+mqtt_client.on_connect = on_connect
+mqtt_client.username_pw_set(program_config['USERNAME'], program_config['PASSWORD'])
 
-mqttc.connect("mqtt.eclipseprojects.io", 1883, 60)
+mqtt_client.connect(program_config['HOST'], program_config['PORT'], 60)
 
-# Blocking call that processes network traffic, dispatches callbacks and
-# handles reconnecting.
-# Other loop*() functions are available that give a threaded interface and a
-# manual interface.
-mqttc.loop_forever()
+test_count = 1
+while test_count <= program_config['TESTCOUNT']:
+    message_payload = {
+        'datetime': datetime.datetime.now().strftime(DATETIMEFORMAT),
+        'count': test_count,
+        'params': {
+            'stream': 'DI',
+            'type': 'bool',
+            'data': True
+        }
+    }
+    mqtt_client.publish(program_config['TESTTOPIC'], json.dumps(message_payload), qos=2)
+
+    message_payload['params']['data'] = False
+    mqtt_client.publish(program_config['TESTTOPIC'], json.dumps(message_payload), qos=2)
+
+    test_count += 1
+    if test_count % 100 == 0:
+        print(f"{test_count} / {program_config['TESTCOUNT']}")
+
+mqtt_client.loop_forever()
